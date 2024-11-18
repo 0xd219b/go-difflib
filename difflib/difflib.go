@@ -588,36 +588,43 @@ func WriteUnifiedDiff(writer io.Writer, diff UnifiedDiff) error {
 			if len(diff.ToDate) > 0 {
 				toDate = "\t" + diff.ToDate
 			}
-			if diff.FromFile != "" || diff.ToFile != "" {
-				err := wf("--- %s%s%s", diff.FromFile, fromDate, diff.Eol)
+			fromFile := diff.FromFile
+			if !strings.HasPrefix(fromFile, "a/") {
+				fromFile = "a/" + fromFile
+			}
+			toFile := diff.ToFile
+			if !strings.HasPrefix(toFile, "b/") {
+				toFile = "b/" + toFile
+			}
+			if fromFile != "" || toFile != "" {
+				err := wf("--- %s%s%s", fromFile, fromDate, diff.Eol)
 				if err != nil {
 					return err
 				}
-				err = wf("+++ %s%s%s", diff.ToFile, toDate, diff.Eol)
+				err = wf("+++ %s%s%s", toFile, toDate, diff.Eol)
 				if err != nil {
 					return err
 				}
 			}
 		}
+
 		first, last := g[0], g[len(g)-1]
 		range1 := formatRangeUnified(first.I1, last.I2)
 		range2 := formatRangeUnified(first.J1, last.J2)
 
-		// 获取变更位置的上下文
 		var context string
-		if len(diff.A) > 0 && first.I1 < len(diff.A) {
-			// 取第一行作为上下文
-			context = strings.TrimRight(diff.A[first.I1], "\n\r")
-			// 如果上下文太长,截断它
-			if len(context) > 40 {
-				context = context[:37] + "..."
-			}
+		if first.I1 > 0 && len(diff.A) > first.I1-1 {
+			context = strings.TrimRight(diff.A[first.I1-1], "\n\r")
 		}
 
 		if err := wf("@@ -%s +%s @@", range1, range2); err != nil {
 			return err
 		}
 		if context != "" {
+			// keep context size below 80 characters
+			if len(context) > 80 {
+				context = context[:80]
+			}
 			if err := wf(" %s", context); err != nil {
 				return err
 			}
@@ -659,7 +666,7 @@ func WriteUnifiedDiff(writer io.Writer, diff UnifiedDiff) error {
 func GetUnifiedDiffString(diff UnifiedDiff) (string, error) {
 	w := &bytes.Buffer{}
 	err := WriteUnifiedDiff(w, diff)
-	return string(w.Bytes()), err
+	return w.String(), err
 }
 
 // Convert range to the "ed" format.
@@ -784,7 +791,7 @@ func WriteContextDiff(writer io.Writer, diff ContextDiff) error {
 func GetContextDiffString(diff ContextDiff) (string, error) {
 	w := &bytes.Buffer{}
 	err := WriteContextDiff(w, diff)
-	return string(w.Bytes()), err
+	return w.String(), err
 }
 
 // Split a string on "\n" while preserving them. The output can be used
