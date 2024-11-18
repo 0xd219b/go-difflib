@@ -406,6 +406,89 @@ func TestSplitLines(t *testing.T) {
 	}
 }
 
+func TestUnifiedDiffWithContext(t *testing.T) {
+	a := []string{
+		"class Example:\n",
+		"    def __init__(self):\n",
+		"        self.x = 1\n",
+		"        self.y = 2\n",
+		"    def method(self):\n",
+		"        return self.x + self.y\n",
+	}
+	b := []string{
+		"class Example:\n",
+		"    def __init__(self):\n",
+		"        self.x = 1\n",
+		"        self.z = 3\n",
+		"    def method(self):\n",
+		"        return self.x + self.z\n",
+	}
+
+	diff := UnifiedDiff{
+		A:        a,
+		B:        b,
+		FromFile: "original.py",
+		ToFile:   "modified.py",
+		Context:  3,
+	}
+
+	result, err := GetUnifiedDiffString(diff)
+	assertEqual(t, err, nil)
+
+	// Split the result into lines for easier comparison
+	lines := strings.Split(result, "\n")
+
+	// Find the @@ line
+	var foundHeader bool
+	for _, line := range lines {
+		if strings.HasPrefix(line, "@@") {
+			// Verify that the context (class Example:) is included
+			assertEqual(t, strings.Contains(line, "class Example:"), true)
+			foundHeader = true
+			break
+		}
+	}
+	assertEqual(t, foundHeader, true)
+}
+
+func TestUnifiedDiffWithLongContext(t *testing.T) {
+	a := []string{
+		"This is a very long line that should be truncated in the context................................................\n",
+		"line2\n",
+	}
+	b := []string{
+		"This is a very long line that should be truncated in the context................................................\n",
+		"modified line2\n",
+	}
+
+	diff := UnifiedDiff{
+		A:        a,
+		B:        b,
+		FromFile: "original.txt",
+		ToFile:   "modified.txt",
+		Context:  3,
+	}
+
+	result, err := GetUnifiedDiffString(diff)
+	assertEqual(t, err, nil)
+
+	lines := strings.Split(result, "\n")
+
+	// Find the @@ line
+	var headerLine string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "@@") {
+			headerLine = line
+			break
+		}
+	}
+
+	// Verify that the context is truncated with ...
+	assertEqual(t, strings.Contains(headerLine, "..."), true)
+	// Verify the context doesn't exceed reasonable length
+	assertEqual(t, len(headerLine) <= 80, true)
+}
+
 func benchmarkSplitLines(b *testing.B, count int) {
 	str := strings.Repeat("foo\n", count)
 

@@ -199,12 +199,15 @@ func (m *SequenceMatcher) isBJunk(s string) bool {
 // If IsJunk is not defined:
 //
 // Return (i,j,k) such that a[i:i+k] is equal to b[j:j+k], where
-//     alo <= i <= i+k <= ahi
-//     blo <= j <= j+k <= bhi
+//
+//	alo <= i <= i+k <= ahi
+//	blo <= j <= j+k <= bhi
+//
 // and for all (i',j',k') meeting those conditions,
-//     k >= k'
-//     i <= i'
-//     and if i == i', j <= j'
+//
+//	k >= k'
+//	i <= i'
+//	and if i == i', j <= j'
 //
 // In other words, of all maximal matching blocks, return one that
 // starts earliest in a, and of all those maximal matching blocks that
@@ -416,7 +419,7 @@ func (m *SequenceMatcher) GetGroupedOpCodes(n int) [][]OpCode {
 	}
 	codes := m.GetOpCodes()
 	if len(codes) == 0 {
-		codes = []OpCode{OpCode{'e', 0, 1, 0, 1}}
+		codes = []OpCode{{'e', 0, 1, 0, 1}}
 	}
 	// Fixup leading and trailing groups if they show no changes.
 	if codes[0].Tag == 'e' {
@@ -599,9 +602,30 @@ func WriteUnifiedDiff(writer io.Writer, diff UnifiedDiff) error {
 		first, last := g[0], g[len(g)-1]
 		range1 := formatRangeUnified(first.I1, last.I2)
 		range2 := formatRangeUnified(first.J1, last.J2)
-		if err := wf("@@ -%s +%s @@%s", range1, range2, diff.Eol); err != nil {
+
+		// 获取变更位置的上下文
+		var context string
+		if len(diff.A) > 0 && first.I1 < len(diff.A) {
+			// 取第一行作为上下文
+			context = strings.TrimRight(diff.A[first.I1], "\n\r")
+			// 如果上下文太长,截断它
+			if len(context) > 40 {
+				context = context[:37] + "..."
+			}
+		}
+
+		if err := wf("@@ -%s +%s @@", range1, range2); err != nil {
 			return err
 		}
+		if context != "" {
+			if err := wf(" %s", context); err != nil {
+				return err
+			}
+		}
+		if err := ws(diff.Eol); err != nil {
+			return err
+		}
+
 		for _, c := range g {
 			i1, i2, j1, j2 := c.I1, c.I2, c.J1, c.J2
 			if c.Tag == 'e' {
